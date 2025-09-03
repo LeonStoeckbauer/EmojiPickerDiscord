@@ -62,6 +62,25 @@ class EmojiPickerApp:
         self.root = root
         self.root.title('Emoji Picker')
         self.emoji_list = self.load_emojis()
+        # Wenn beim ersten Start und emojis.json leer ist, Standard-Emojis einfügen
+        if not self.emoji_list:
+            self.emoji_list = [
+                {"link": "https://cdn.7tv.app/emote/01F6MKTFTG0009C9ZSNZTFV2ZF/3x.avif", "name": "NOOOO"},
+                {"link": "https://cdn.7tv.app/emote/01F6MZGCNG000255K4X1K7NTHR/3x.avif", "name": "GIGACHAD"},
+                {"link": "https://cdn.7tv.app/emote/01F6MQ33FG000FFJ97ZB8MWV52/3x.avif", "name": "catJAM"},
+                {"link": "https://cdn.7tv.app/emote/01F7M225F8000AWSXNQ65M4PKG/3x.avif", "name": "SNIFFA"},
+                {"link": "https://cdn.7tv.app/emote/01GBFAYKGR000FWWN7MDZZ8XQN/3x.avif", "name": "RAGEY"},
+                {"link": "https://cdn.7tv.app/emote/01H0405680000AJFXTYVX2PNJ7/3x.avif", "name": "uuh"},
+                {"link": "https://cdn.7tv.app/emote/01F6NCKMP000052X5637DW2XDY/3x.avif", "name": "meow"},
+                {"link": "https://cdn.7tv.app/emote/01F6ME9FRG0005TFYTWP1H8R42/3x.avif", "name": "catJam"},
+                {"link": "https://cdn.7tv.app/emote/01F6N7QDN8000DJW55Q77ZXZ4E/3x.avif", "name": "Awkward"},
+                {"link": "https://cdn.7tv.app/emote/01FCJPHMT00008XKZT17QKXE7W/3x.avif", "name": "YesYes"},
+                {"link": "https://cdn.7tv.app/emote/01FECSYPZR0002KVMNHJBZWTWH/3x.avif", "name": "PLEASE\n"},
+                {"link": "https://cdn.7tv.app/emote/01FC4W70J80005D6HG0ANTP023/3x.avif", "name": "AAAA"},
+                {"link": "https://cdn.7tv.app/emote/01GMAH9MB000066S7TTNVB1TGD/3x.avif", "name": "veryCat"},
+                {"link": "https://cdn.7tv.app/emote/01GNDAV6R8000ASVTS4W77SX5G/3x.avif", "name": "TheVoices"}
+            ]
+            self.save_emojis()
         self.config = self.load_config()
         self.hotkey = self.config.get('hotkey', 'ctrl+shift+e')
         self.create_widgets()
