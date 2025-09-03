@@ -12,6 +12,8 @@ import pyautogui
 import pygetwindow as gw
 import time
 import hashlib
+import pystray
+from PIL import Image as PILImage
 
 EMOJI_FILE = os.path.join(os.path.dirname(__file__), 'emojis.json')
 CACHE_DIR = os.path.join(os.path.dirname(__file__), 'emoji_cache')
@@ -47,8 +49,8 @@ class EmojiPickerApp:
         ttk.Button(btn_frame, text='Emoji hinzufügen', command=self.add_emoji_dialog).pack(side='left', padx=2)
 
     def register_hotkey(self):
-        keyboard.add_hotkey('ctrl+shift+e', lambda: self.root.event_generate('<<OpenEmojiPopover>>'))
-        self.root.bind('<<OpenEmojiPopover>>', lambda e: self.open_popover())
+        # Hotkey ruft jetzt direkt open_popover auf, nicht mehr über Tkinter-Event
+        keyboard.add_hotkey('ctrl+shift+e', lambda: self.open_popover())
         keyboard.wait()  # blockiert Thread, hält Hotkey aktiv
 
     def get_cached_image_path(self, url):
@@ -82,12 +84,17 @@ class EmojiPickerApp:
             self.last_active_window = None
         # Mausposition holen
         x, y = pyautogui.position()
-        if hasattr(self, 'popover') and self.popover.winfo_exists():
-            self.popover.lift()
-            self.popover.geometry(f'+{x}+{y}')
-            self.popover.attributes('-topmost', True)
-            self.popover.focus_force()
-            return
+        # Popover-Existenz robust prüfen
+        if hasattr(self, 'popover') and self.popover is not None:
+            try:
+                if self.popover.winfo_exists():
+                    self.popover.lift()
+                    self.popover.geometry(f'+{x}+{y}')
+                    self.popover.attributes('-topmost', True)
+                    self.popover.focus_force()
+                    return
+            except Exception:
+                self.popover = None
         self.popover = tk.Toplevel(self.root)
         self.popover.title('Emoji auswählen')
         self.popover.transient(self.root)
@@ -105,7 +112,12 @@ class EmojiPickerApp:
             if messagebox.askyesno('Emoji löschen', 'Dieses Emoji wirklich löschen?'):
                 del self.emoji_list[idx]
                 self.save_emojis()
-                self.popover.destroy()
+                if hasattr(self, 'popover') and self.popover is not None:
+                    try:
+                        self.popover.destroy()
+                    except Exception:
+                        pass
+                    self.popover = None
                 self.open_popover()
         for idx, emoji in enumerate(self.emoji_list):
             try:
@@ -149,8 +161,12 @@ class EmojiPickerApp:
 
     def select_emoji(self, link):
         # Popover schließen
-        if hasattr(self, 'popover'):
-            self.popover.destroy()
+        if hasattr(self, 'popover') and self.popover is not None:
+            try:
+                self.popover.destroy()
+            except Exception:
+                pass
+            self.popover = None
         # Fokus zurück zum letzten aktiven Fenster
         if self.last_active_window is not None:
             try:
@@ -189,6 +205,23 @@ class EmojiPickerApp:
         self.emoji_list.append({'link': url, 'name': name or ''})
         self.save_emojis()
         messagebox.showinfo('Erfolg', 'Emoji hinzugefügt!')
+
+    def run_tray(self):
+        def on_open():
+            self.root.after(0, self.open_popover)
+        def on_add():
+            self.root.after(0, self.add_emoji_dialog)
+        def on_quit():
+            self.tray_icon.stop()
+            self.root.after(0, self.root.destroy)
+        image = PILImage.open(os.path.join(os.path.dirname(__file__), 'tray_icon.png'))
+        menu = pystray.Menu(
+            pystray.MenuItem('Emoji auswählen', lambda: on_open()),
+            pystray.MenuItem('Emoji hinzufügen', lambda: on_add()),
+            pystray.MenuItem('Beenden', lambda: on_quit())
+        )
+        self.tray_icon = pystray.Icon('emoji_picker', image, 'Emoji Picker', menu)
+        self.tray_icon.run()
 
 class ToolTip:
     def __init__(self, widget, text):
@@ -249,4 +282,6 @@ class ToolTip:
 if __name__ == '__main__':
     root = tk.Tk()
     app = EmojiPickerApp(root)
+    root.withdraw()  # Hauptfenster verstecken
+    threading.Thread(target=app.run_tray, daemon=True).start()
     root.mainloop()
