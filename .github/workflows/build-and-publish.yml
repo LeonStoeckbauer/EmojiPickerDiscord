@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - "v*"
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,9 +25,7 @@ jobs:
       run: |
         $env:TAG_NAME = '${{ github.ref_name }}'
         pyinstaller --onefile --noconsole --add-data "tray_icon.png;." --add-data "emojis.json;." emoji_picker.py -n "EmojiPicker_$env:TAG_NAME"
-        Copy-Item emojis.json dist\emojis.json
-        Copy-Item tray_icon.png dist\tray_icon.png
-        tar.exe -a -c -f "./dist/EmojiPicker_$env:TAG_NAME.zip" -C ./dist "EmojiPicker_$env:TAG_NAME.exe" "emojis.json" "tray_icon.png"
+        tar.exe -a -c -f "./dist/EmojiPicker_$env:TAG_NAME.zip" -C ./dist "EmojiPicker_$env:TAG_NAME.exe"
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
@@ -34,4 +34,3 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         token: ${{ secrets.GITHUB_TOKEN }}
-
