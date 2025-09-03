@@ -127,6 +127,7 @@ class EmojiPickerApp:
 
         self.root.after(0, ask)
 
+
     def get_cached_image_path(self, url):
         ext = url.split('.')[-1].lower()
         h = hashlib.sha256(url.encode('utf-8')).hexdigest()
