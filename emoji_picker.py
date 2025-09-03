@@ -30,6 +30,7 @@ CACHE_DIR = os.path.join(BASE_DATA_DIR, 'emoji_cache')
 CONFIG_FILE = os.path.join(BASE_DATA_DIR, 'config.json')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
+
 class EmojiPickerApp:
     def load_emojis(self):
         if not os.path.exists(EMOJI_FILE):
@@ -72,7 +73,8 @@ class EmojiPickerApp:
     def create_widgets(self):
         frame = ttk.Frame(self.root, padding=10)
         frame.pack(fill='both', expand=True)
-        ttk.Label(frame, text='Emoji Picker läuft im Hintergrund. Globaler Hotkey: Strg+Shift+E').pack(anchor='w', pady=10)
+        ttk.Label(frame, text='Emoji Picker läuft im Hintergrund. Globaler Hotkey: Strg+Shift+E').pack(anchor='w',
+                                                                                                       pady=10)
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill='x', pady=5)
         ttk.Button(btn_frame, text='Emoji auswählen', command=self.open_popover).pack(side='left', padx=2)
@@ -89,7 +91,8 @@ class EmojiPickerApp:
 
     def change_hotkey(self):
         def ask():
-            new_hotkey = simpledialog.askstring('Hotkey ändern', 'Neuen Hotkey eingeben (z.B. ctrl+alt+e):', initialvalue=self.hotkey)
+            new_hotkey = simpledialog.askstring('Hotkey ändern', 'Neuen Hotkey eingeben (z.B. ctrl+alt+e):',
+                                                initialvalue=self.hotkey)
             if not new_hotkey:
                 return  # Abbruch oder leere Eingabe
             old_hotkey = self.hotkey
@@ -121,6 +124,7 @@ class EmojiPickerApp:
                 self.config['hotkey'] = old_hotkey
                 self.save_config()
                 messagebox.showerror('Fehler', f'Hotkey konnte nicht geändert werden:\n{e}')
+
         self.root.after(0, ask)
 
     def get_cached_image_path(self, url):
@@ -176,6 +180,7 @@ class EmojiPickerApp:
         grid.pack()
         self.emoji_images = []
         columns = 6
+
         def delete_emoji(idx):
             if messagebox.askyesno('Emoji löschen', 'Dieses Emoji wirklich löschen?'):
                 del self.emoji_list[idx]
@@ -187,6 +192,7 @@ class EmojiPickerApp:
                         pass
                     self.popover = None
                 self.open_popover()
+
         for idx, emoji in enumerate(self.emoji_list):
             try:
                 img_bytes = self.fetch_and_cache_image(emoji['link'])
@@ -203,8 +209,10 @@ class EmojiPickerApp:
                     img = Image.open(img_bytes_io).resize((32, 32))
                 tk_img = ImageTk.PhotoImage(img)
                 self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
-                btn.grid(row=idx//columns, column=idx%columns, padx=4, pady=4)
+                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
+                                bd=0, highlightthickness=0)
+                btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
+
                 # Rechtsklick-Kontextmenü
                 def make_popup(event, i=idx, e=emoji):
                     menu = tk.Menu(self.popover, tearoff=0)
@@ -212,19 +220,23 @@ class EmojiPickerApp:
                         menu.add_command(label=f'Name: {e["name"]}', state='disabled')
                     menu.add_command(label='Emoji löschen', command=lambda: delete_emoji(i))
                     menu.tk_popup(event.x_root, event.y_root)
+
                 btn.bind('<Button-3>', make_popup)
             except Exception:
                 img = Image.new('RGBA', (32, 32), (200, 200, 200, 255))
                 tk_img = ImageTk.PhotoImage(img)
                 self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
-                btn.grid(row=idx//columns, column=idx%columns, padx=4, pady=4)
+                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
+                                bd=0, highlightthickness=0)
+                btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
+
                 def make_popup(event, i=idx, e=emoji):
                     menu = tk.Menu(self.popover, tearoff=0)
                     if e.get('name'):
                         menu.add_command(label=f'Name: {e["name"]}', state='disabled')
                     menu.add_command(label='Emoji löschen', command=lambda: delete_emoji(i))
                     menu.tk_popup(event.x_root, event.y_root)
+
                 btn.bind('<Button-3>', make_popup)
 
     def select_emoji(self, link):
@@ -284,15 +296,20 @@ class EmojiPickerApp:
     def run_tray(self):
         def on_open():
             self.root.after(0, self.open_popover)
+
         def on_add():
             self.root.after(0, self.add_emoji_dialog)
+
         def on_hotkey():
             self.change_hotkey()
+
         def on_open_folder():
             self.root.after(0, self.open_data_folder)
+
         def on_quit():
             self.tray_icon.stop()
             self.root.after(0, self.root.destroy)
+
         image = PILImage.open(os.path.join(os.path.dirname(__file__), 'tray_icon.png'))
         menu = pystray.Menu(
             pystray.MenuItem('Emoji auswählen', lambda: on_open()),
@@ -303,6 +320,7 @@ class EmojiPickerApp:
         )
         self.tray_icon = pystray.Icon('emoji_picker', image, 'Emoji Picker', menu)
         self.tray_icon.run()
+
 
 class ToolTip:
     def __init__(self, widget, text):
@@ -351,7 +369,8 @@ class ToolTip:
         tw.wm_geometry(f'+{x}+{y}')
         tw.attributes('-topmost', True)
         tw.transient(parent)
-        label = tk.Label(tw, text=self.text, justify='left', background='#ffffe0', relief='solid', borderwidth=1, font=('tahoma', '8', 'normal'))
+        label = tk.Label(tw, text=self.text, justify='left', background='#ffffe0', relief='solid', borderwidth=1,
+                         font=('tahoma', '8', 'normal'))
         label.pack(ipadx=2)
 
     def hidetip(self):
@@ -359,6 +378,7 @@ class ToolTip:
         self.tipwindow = None
         if tw:
             tw.destroy()
+
 
 if __name__ == '__main__':
     root = tk.Tk()
