@@ -1,5 +1,6 @@
 emoji_cache/*
-.idea
+.idea/*
+config.json
 
 
 ### Python template
