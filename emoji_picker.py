@@ -14,6 +14,7 @@ import time
 import hashlib
 import pystray
 from PIL import Image as PILImage
+import random
 
 EMOJI_FILE = os.path.join(os.path.dirname(__file__), 'emojis.json')
 CACHE_DIR = os.path.join(os.path.dirname(__file__), 'emoji_cache')
@@ -84,17 +85,15 @@ class EmojiPickerApp:
             self.last_active_window = None
         # Mausposition holen
         x, y = pyautogui.position()
-        # Popover-Existenz robust prüfen
+        # Wenn Fenster offen, schließen und neu öffnen
         if hasattr(self, 'popover') and self.popover is not None:
             try:
                 if self.popover.winfo_exists():
-                    self.popover.lift()
-                    self.popover.geometry(f'+{x}+{y}')
-                    self.popover.attributes('-topmost', True)
-                    self.popover.focus_force()
-                    return
+                    self.popover.destroy()
             except Exception:
-                self.popover = None
+                pass
+            self.popover = None
+        # Fenster immer neu an aktueller Mausposition öffnen
         self.popover = tk.Toplevel(self.root)
         self.popover.title('Emoji auswählen')
         self.popover.transient(self.root)
