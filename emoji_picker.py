@@ -15,10 +15,19 @@ import hashlib
 import pystray
 from PIL import Image as PILImage
 import random
+import sys
 
-EMOJI_FILE = os.path.join(os.path.dirname(__file__), 'emojis.json')
-CACHE_DIR = os.path.join(os.path.dirname(__file__), 'emoji_cache')
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+# AppData-Pfad bestimmen (plattformunabhängig)
+if sys.platform == 'win32':
+    BASE_DATA_DIR = os.path.join(os.environ.get('APPDATA'), 'EmojiPickerDiscord')
+else:
+    BASE_DATA_DIR = os.path.join(os.path.expanduser('~'), '.config', 'EmojiPickerDiscord')
+
+os.makedirs(BASE_DATA_DIR, exist_ok=True)
+
+EMOJI_FILE = os.path.join(BASE_DATA_DIR, 'emojis.json')
+CACHE_DIR = os.path.join(BASE_DATA_DIR, 'emoji_cache')
+CONFIG_FILE = os.path.join(BASE_DATA_DIR, 'config.json')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 class EmojiPickerApp:
@@ -265,6 +274,13 @@ class EmojiPickerApp:
         self.save_emojis()
         messagebox.showinfo('Erfolg', 'Emoji hinzugefügt!')
 
+    def open_data_folder(self):
+        # Öffnet den Ordner, in dem Cache und Config liegen
+        try:
+            os.startfile(BASE_DATA_DIR)
+        except Exception as e:
+            messagebox.showerror('Fehler', f'Ordner konnte nicht geöffnet werden:\n{e}')
+
     def run_tray(self):
         def on_open():
             self.root.after(0, self.open_popover)
@@ -272,6 +288,8 @@ class EmojiPickerApp:
             self.root.after(0, self.add_emoji_dialog)
         def on_hotkey():
             self.change_hotkey()
+        def on_open_folder():
+            self.root.after(0, self.open_data_folder)
         def on_quit():
             self.tray_icon.stop()
             self.root.after(0, self.root.destroy)
@@ -280,6 +298,7 @@ class EmojiPickerApp:
             pystray.MenuItem('Emoji auswählen', lambda: on_open()),
             pystray.MenuItem('Emoji hinzufügen', lambda: on_add()),
             pystray.MenuItem('Hotkey ändern', lambda: on_hotkey()),
+            pystray.MenuItem('Ordner öffnen', lambda: on_open_folder()),
             pystray.MenuItem('Beenden', lambda: on_quit())
         )
         self.tray_icon = pystray.Icon('emoji_picker', image, 'Emoji Picker', menu)
