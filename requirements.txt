@@ -1,0 +1,8 @@
+pillow
+requests
+pyperclip
+keyboard
+pyautogui
+pygetwindow
+pystray
+
