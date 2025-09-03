@@ -18,18 +18,10 @@ import random
 
 EMOJI_FILE = os.path.join(os.path.dirname(__file__), 'emojis.json')
 CACHE_DIR = os.path.join(os.path.dirname(__file__), 'emoji_cache')
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 class EmojiPickerApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title('Emoji Picker')
-        self.emoji_list = self.load_emojis()
-        self.create_widgets()
-        # Globaler Hotkey in separatem Thread
-        threading.Thread(target=self.register_hotkey, daemon=True).start()
-        self.last_active_window = None
-
     def load_emojis(self):
         if not os.path.exists(EMOJI_FILE):
             return []
@@ -39,6 +31,34 @@ class EmojiPickerApp:
     def save_emojis(self):
         with open(EMOJI_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.emoji_list, f, indent=4)
+
+    def load_config(self):
+        if not os.path.exists(CONFIG_FILE):
+            return {'hotkey': 'ctrl+shift+e'}
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {'hotkey': 'ctrl+shift+e'}
+
+    def save_config(self):
+        try:
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=4)
+        except Exception:
+            pass
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title('Emoji Picker')
+        self.emoji_list = self.load_emojis()
+        self.config = self.load_config()
+        self.hotkey = self.config.get('hotkey', 'ctrl+shift+e')
+        self.create_widgets()
+        # Globaler Hotkey in separatem Thread
+        self.hotkey_handle = None
+        threading.Thread(target=self.register_hotkey, daemon=True).start()
+        self.last_active_window = None
 
     def create_widgets(self):
         frame = ttk.Frame(self.root, padding=10)
@@ -50,9 +70,49 @@ class EmojiPickerApp:
         ttk.Button(btn_frame, text='Emoji hinzufügen', command=self.add_emoji_dialog).pack(side='left', padx=2)
 
     def register_hotkey(self):
-        # Hotkey ruft jetzt direkt open_popover auf, nicht mehr über Tkinter-Event
-        keyboard.add_hotkey('ctrl+shift+e', lambda: self.open_popover())
+        if self.hotkey_handle:
+            try:
+                keyboard.remove_hotkey(self.hotkey_handle)
+            except Exception:
+                pass
+        self.hotkey_handle = keyboard.add_hotkey(self.hotkey, lambda: self.open_popover())
         keyboard.wait()  # blockiert Thread, hält Hotkey aktiv
+
+    def change_hotkey(self):
+        def ask():
+            new_hotkey = simpledialog.askstring('Hotkey ändern', 'Neuen Hotkey eingeben (z.B. ctrl+alt+e):', initialvalue=self.hotkey)
+            if not new_hotkey:
+                return  # Abbruch oder leere Eingabe
+            old_hotkey = self.hotkey
+            old_handle = self.hotkey_handle
+            try:
+                # Alten Hotkey deregistrieren
+                if old_handle:
+                    try:
+                        keyboard.remove_hotkey(old_handle)
+                    except Exception:
+                        pass
+                # Neuen Hotkey registrieren
+                new_handle = keyboard.add_hotkey(new_hotkey, lambda: self.open_popover())
+                # Test: Hotkey-String valid?
+                if not new_handle:
+                    raise ValueError('Hotkey konnte nicht registriert werden.')
+                self.hotkey = new_hotkey
+                self.hotkey_handle = new_handle
+                self.config['hotkey'] = new_hotkey
+                self.save_config()
+                messagebox.showinfo('Hotkey geändert', f'Neuer Hotkey: {self.hotkey}')
+            except Exception as e:
+                # Alten Hotkey wiederherstellen
+                try:
+                    self.hotkey_handle = keyboard.add_hotkey(old_hotkey, lambda: self.open_popover())
+                except Exception:
+                    pass
+                self.hotkey = old_hotkey
+                self.config['hotkey'] = old_hotkey
+                self.save_config()
+                messagebox.showerror('Fehler', f'Hotkey konnte nicht geändert werden:\n{e}')
+        self.root.after(0, ask)
 
     def get_cached_image_path(self, url):
         ext = url.split('.')[-1].lower()
@@ -210,6 +270,8 @@ class EmojiPickerApp:
             self.root.after(0, self.open_popover)
         def on_add():
             self.root.after(0, self.add_emoji_dialog)
+        def on_hotkey():
+            self.change_hotkey()
         def on_quit():
             self.tray_icon.stop()
             self.root.after(0, self.root.destroy)
@@ -217,6 +279,7 @@ class EmojiPickerApp:
         menu = pystray.Menu(
             pystray.MenuItem('Emoji auswählen', lambda: on_open()),
             pystray.MenuItem('Emoji hinzufügen', lambda: on_add()),
+            pystray.MenuItem('Hotkey ändern', lambda: on_hotkey()),
             pystray.MenuItem('Beenden', lambda: on_quit())
         )
         self.tray_icon = pystray.Icon('emoji_picker', image, 'Emoji Picker', menu)
