@@ -1,3 +1,17 @@
+import sys
+if sys.platform == 'win32':
+    import win32event
+    import win32api
+    import winerror
+    mutex = win32event.CreateMutex(None, False, 'EmojiPickerDiscordMutex')
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror('EmojiPicker läuft bereits', 'Die Anwendung ist bereits gestartet!')
+        sys.exit(0)
+
 import tkinter as tk
 from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk
