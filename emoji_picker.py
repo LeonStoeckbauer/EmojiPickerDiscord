@@ -1,19 +1,4 @@
 import sys
-if sys.platform == 'win32':
-    import win32event
-    import win32api
-    import winerror
-    mutex = win32event.CreateMutex(None, False, 'EmojiPickerDiscordMutex')
-    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-        import tkinter as tk
-        from tkinter import messagebox
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        messagebox.showerror('EmojiPicker läuft bereits', 'Die Anwendung ist bereits gestartet!', parent=root)
-        root.destroy()
-        sys.exit(0)
-
 import tkinter as tk
 from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk
@@ -30,8 +15,22 @@ import time
 import hashlib
 import pystray
 from PIL import Image as PILImage
-import random
-import sys
+
+# Einfache Mutex-Implementierung für Windows, um Mehrfachstarts zu verhindern
+if sys.platform == 'win32':
+    import win32event
+    import win32api
+    import winerror
+    mutex = win32event.CreateMutex(None, False, 'EmojiPickerDiscordMutex')
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        messagebox.showerror('EmojiPicker läuft bereits', 'Die Anwendung ist bereits gestartet!', parent=root)
+        root.destroy()
+        sys.exit(0)
 
 # AppData-Pfad bestimmen (plattformunabhängig)
 if sys.platform == 'win32':
