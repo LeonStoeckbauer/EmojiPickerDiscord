@@ -11,7 +11,7 @@ rmdir /s /q dist
 del /q emoji_picker.spec
 
 
-REM PyInstaller ausführen (mit clean und hidden-import für pyperclip und Icon als .ico)
+REM PyInstaller ausführen
 pyinstaller --onefile --noconsole --add-data "tray_icon.png;." --add-data "emojis.json;." emoji_picker.py
 
 REM Hinweis für den Nutzer
