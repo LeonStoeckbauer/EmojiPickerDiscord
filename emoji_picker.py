@@ -1,3 +1,19 @@
+import sys
+if sys.platform == 'win32':
+    import win32event
+    import win32api
+    import winerror
+    mutex = win32event.CreateMutex(None, False, 'EmojiPickerDiscordMutex')
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        messagebox.showerror('EmojiPicker läuft bereits', 'Die Anwendung ist bereits gestartet!', parent=root)
+        root.destroy()
+        sys.exit(0)
+
 import tkinter as tk
 from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk
@@ -274,7 +290,7 @@ class EmojiPickerApp:
                 time.sleep(0.05)  # noch kürzer für schnelleren Paste
             except Exception:
                 pass
-        # Link in Zwischenablage und per Ctrl+V einfügen (schneller als keyboard.write)
+        # Link in Zwischenablage und per Ctrl+V einfügen
         pyperclip.copy(link)
         try:
             keyboard.press_and_release('ctrl+v')
@@ -292,7 +308,7 @@ class EmojiPickerApp:
             allowed_exts = ('png', 'gif', 'avif', 'jpg', 'jpeg', 'webp')
             if ext not in allowed_exts:
                 raise ValueError('Nur PNG, GIF, AVIF, JPG oder WEBP erlaubt.')
-            # Pillow kann AVIF evtl. nicht öffnen, das ist ok
+            # Pillow kann AVIF evtl. nicht öffnen, ist ok
             try:
                 Image.open(img_bytes)
             except Exception:
@@ -354,16 +370,13 @@ class ToolTip:
         widget.bind('<Motion>', self.motion)
 
     def enter(self, event=None):
-        # print('Tooltip enter')
         self.schedule()
 
     def leave(self, event=None):
-        # print('Tooltip leave')
         self.unschedule()
         self.hidetip()
 
     def motion(self, event=None):
-        # print('Tooltip motion')
         if self.tipwindow:
             self.showtip(event)
 
@@ -403,6 +416,6 @@ class ToolTip:
 if __name__ == '__main__':
     root = tk.Tk()
     app = EmojiPickerApp(root)
-    root.withdraw()  # Hauptfenster verstecken
+    root.withdraw()
     threading.Thread(target=app.run_tray, daemon=True).start()
     root.mainloop()

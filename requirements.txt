@@ -5,4 +5,4 @@ keyboard
 pyautogui
 pygetwindow
 pystray
-
+pywin32
