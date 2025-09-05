@@ -214,7 +214,9 @@ class EmojiPickerApp:
         grid = ttk.Frame(self.popover, padding=10)
         grid.pack()
         self.emoji_images = []
+        self.emoji_anim_states = []  # Animation-Status pro Button
         columns = 6
+        EMOJI_SIZE = 64
 
         def delete_emoji(idx):
             if messagebox.askyesno('Emoji löschen', 'Dieses Emoji wirklich löschen?'):
@@ -234,19 +236,66 @@ class EmojiPickerApp:
                 if img_bytes is None:
                     raise Exception('Kein Bild')
                 img_bytes_io = io.BytesIO(img_bytes)
-                # AVIF-Unterstützung prüfen
-                if emoji['link'].lower().endswith('.avif'):
+                ext = emoji['link'].split('.')[-1].lower()
+                is_animated = False
+                frames = []
+                pil_img = None
+                # GIF oder AVIF prüfen
+                if ext in ('gif', 'avif'):
                     try:
-                        img = Image.open(img_bytes_io).resize((32, 32))
+                        pil_img = Image.open(img_bytes_io)
+                        is_animated = getattr(pil_img, 'is_animated', False)
                     except Exception:
-                        img = Image.new('RGBA', (32, 32), (200, 200, 200, 255))
+                        pil_img = None
+                if is_animated and pil_img:
+                    try:
+                        for frame_idx in range(pil_img.n_frames):
+                            pil_img.seek(frame_idx)
+                            frame = pil_img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                            frames.append(ImageTk.PhotoImage(frame))
+                    except Exception:
+                        pass
+                if frames:
+                    self.emoji_images.append(frames)
+                    self.emoji_anim_states.append({'running': False, 'after_id': None})
+                    btn = tk.Button(grid, image=frames[0], command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
+                    btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
+                    def start_animation(event, btn=btn, frames=frames, idx=idx):
+                        state = self.emoji_anim_states[idx]
+                        if state['running']:
+                            return
+                        state['running'] = True
+                        def animate(frame_idx=0):
+                            if not state['running']:
+                                btn.config(image=frames[0])
+                                return
+                            btn.config(image=frames[frame_idx])
+                            state['after_id'] = self.popover.after(80, animate, (frame_idx + 1) % len(frames))
+                        animate()
+                    def stop_animation(event, btn=btn, frames=frames, idx=idx):
+                        state = self.emoji_anim_states[idx]
+                        state['running'] = False
+                        if state['after_id']:
+                            self.popover.after_cancel(state['after_id'])
+                            state['after_id'] = None
+                        btn.config(image=frames[0])
+                    btn.bind('<Enter>', start_animation)
+                    btn.bind('<Leave>', stop_animation)
                 else:
-                    img = Image.open(img_bytes_io).resize((32, 32))
-                tk_img = ImageTk.PhotoImage(img)
-                self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
-                                bd=0, highlightthickness=0)
-                btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
+                    # Statisches Bild (PNG, JPG, nicht-animiertes AVIF, WEBP)
+                    try:
+                        if pil_img:
+                            pil_img.seek(0)
+                            img = pil_img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                        else:
+                            img = Image.open(img_bytes_io).resize((EMOJI_SIZE, EMOJI_SIZE))
+                    except Exception:
+                        img = Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255))
+                    tk_img = ImageTk.PhotoImage(img)
+                    self.emoji_images.append(tk_img)
+                    self.emoji_anim_states.append(None)
+                    btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
+                    btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
 
                 # Rechtsklick-Kontextmenü
                 def make_popup(event, i=idx, e=emoji):
@@ -258,11 +307,11 @@ class EmojiPickerApp:
 
                 btn.bind('<Button-3>', make_popup)
             except Exception:
-                img = Image.new('RGBA', (32, 32), (200, 200, 200, 255))
+                img = Image.new('RGBA', (64, 64), (200, 200, 200, 255))
                 tk_img = ImageTk.PhotoImage(img)
                 self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
-                                bd=0, highlightthickness=0)
+                self.emoji_anim_states.append(None)
+                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
                 btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
 
                 def make_popup(event, i=idx, e=emoji):
