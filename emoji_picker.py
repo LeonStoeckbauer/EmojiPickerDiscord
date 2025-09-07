@@ -224,7 +224,6 @@ class EmojiPickerApp:
             return
         img_bytes_io = io.BytesIO(img_bytes)
         ext = url.split('.')[-1].lower()
-        EMOJI_SIZE = 64
         try:
             pil_img = Image.open(img_bytes_io)
             is_animated = getattr(pil_img, 'is_animated', False)
@@ -294,7 +293,6 @@ class EmojiPickerApp:
         self.emoji_images = []
         self.emoji_anim_states = []
         columns = 6
-        EMOJI_SIZE = 64
 
         def delete_emoji(idx):
             if messagebox.askyesno('Emoji löschen', 'Dieses Emoji wirklich löschen?'):
@@ -330,9 +328,8 @@ class EmojiPickerApp:
                         static_photo = ImageTk.PhotoImage(static_img)
                     except Exception:
                         static_photo = None
-                static_photo = ImageTk.PhotoImage(Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255)))
-            if static_photo is None:
-                static_photo = ImageTk.PhotoImage(Image.new('RGBA', (64, 64), (200, 200, 200, 255)))
+                if static_photo is None:
+                    static_photo = ImageTk.PhotoImage(Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255)))
             self.emoji_images.append(static_photo)
             self.emoji_anim_states.append({'frames': None, 'running': False, 'after_id': None})
             btn = tk.Button(grid, image=static_photo, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
@@ -365,7 +362,7 @@ class EmojiPickerApp:
                             btn.config(image=state['frames'][0])
                             return
                         btn.config(image=state['frames'][frame_idx])
-                        state['after_id'] = self.popover.after(80, animate, (frame_idx + 1) % len(state['frames']))
+                        state['after_id'] = self.popover.after(ANIMATION_DELAY_MS, animate, (frame_idx + 1) % len(state['frames']))
                     animate()
             def stop_animation(event, btn=btn, idx=idx):
                 state = self.emoji_anim_states[idx]
