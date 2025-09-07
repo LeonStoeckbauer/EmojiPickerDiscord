@@ -16,6 +16,9 @@ import hashlib
 import pystray
 from PIL import Image as PILImage
 
+EMOJI_SIZE = 64
+ANIMATION_DELAY_MS = 80  # Verzögerung für Emoji-Animationen in Millisekunden
+
 # Einfache Mutex-Implementierung für Windows, um Mehrfachstarts zu verhindern
 if sys.platform == 'win32':
     import win32event
@@ -202,6 +205,17 @@ class EmojiPickerApp:
             return os.path.join(CACHE_DIR_PREVIEW, f'{h}.{ext}')
 
     def create_emoji_preview_cache(self, emoji):
+        """
+        Erstellt und speichert eine Vorschau für ein Emoji als PNG im Cache-Verzeichnis.
+        Für animierte Emojis werden alle Frames als einzelne PNGs gespeichert.
+        Für statische Emojis wird ein einzelnes PNG erzeugt.
+        Parameter:
+            emoji (dict): Emoji-Daten mit 'link' (Bild-URL) und optional 'name'.
+        Verhalten:
+            - Lädt das Bild (ggf. aus Cache), skaliert es auf EMOJI_SIZE.
+            - Speichert die Vorschau im CACHE_DIR_PREVIEW.
+            - Bei Fehlern wird ein Platzhalterbild erzeugt.
+        """
         url = emoji['link']
         print(f'[PreviewCache] Starte für {url}')
         img_bytes = self.fetch_and_cache_image(url)
@@ -316,7 +330,7 @@ class EmojiPickerApp:
                         static_photo = ImageTk.PhotoImage(static_img)
                     except Exception:
                         static_photo = None
-            # If still missing, use fallback
+                static_photo = ImageTk.PhotoImage(Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255)))
             if static_photo is None:
                 static_photo = ImageTk.PhotoImage(Image.new('RGBA', (64, 64), (200, 200, 200, 255)))
             self.emoji_images.append(static_photo)
