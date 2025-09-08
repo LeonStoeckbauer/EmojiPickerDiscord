@@ -16,6 +16,9 @@ import hashlib
 import pystray
 from PIL import Image as PILImage
 
+EMOJI_SIZE = 64
+ANIMATION_DELAY_MS = 100  # Delay for emoji animations in milliseconds
+
 # Einfache Mutex-Implementierung für Windows, um Mehrfachstarts zu verhindern
 if sys.platform == 'win32':
     import win32event
@@ -42,8 +45,10 @@ os.makedirs(BASE_DATA_DIR, exist_ok=True)
 
 EMOJI_FILE = os.path.join(BASE_DATA_DIR, 'emojis.json')
 CACHE_DIR = os.path.join(BASE_DATA_DIR, 'emoji_cache')
+CACHE_DIR_PREVIEW = os.path.join(BASE_DATA_DIR, 'emoji_preview_cache')
 CONFIG_FILE = os.path.join(BASE_DATA_DIR, 'config.json')
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR_PREVIEW, exist_ok=True)
 
 
 class EmojiPickerApp:
@@ -56,6 +61,12 @@ class EmojiPickerApp:
     def save_emojis(self):
         with open(EMOJI_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.emoji_list, f, indent=4)
+        # Vorschau-Cache für alle Emojis im Hintergrund erzeugen
+        def cache_worker():
+            for emoji in self.emoji_list:
+                self.create_emoji_preview_cache(emoji)
+            self.invalidate_emoji_previews()
+        threading.Thread(target=cache_worker, daemon=True).start()
 
     def load_config(self):
         if not os.path.exists(CONFIG_FILE):
@@ -99,10 +110,13 @@ class EmojiPickerApp:
         self.config = self.load_config()
         self.hotkey = self.config.get('hotkey', 'ctrl+shift+e')
         self.create_widgets()
-        # Globaler Hotkey in separatem Thread
         self.hotkey_handle = None
         threading.Thread(target=self.register_hotkey, daemon=True).start()
         self.last_active_window = None
+        self.emoji_previews = None  # Cache für die Tkinter-Bilder/Frames
+
+    def invalidate_emoji_previews(self):
+        self.emoji_previews = None
 
     def create_widgets(self):
         frame = ttk.Frame(self.root, padding=10)
@@ -161,7 +175,6 @@ class EmojiPickerApp:
 
         self.root.after(0, ask)
 
-
     def get_cached_image_path(self, url):
         ext = url.split('.')[-1].lower()
         h = hashlib.sha256(url.encode('utf-8')).hexdigest()
@@ -185,15 +198,82 @@ class EmojiPickerApp:
             pass
         return None
 
+    def get_preview_cache_path(self, url, frame_idx=None):
+        ext = 'png'
+        h = hashlib.sha256(url.encode('utf-8')).hexdigest()
+        if frame_idx is not None:
+            return os.path.join(CACHE_DIR_PREVIEW, f'{h}_{frame_idx}.{ext}')
+        else:
+            return os.path.join(CACHE_DIR_PREVIEW, f'{h}.{ext}')
+
+    def create_emoji_preview_cache(self, emoji):
+        """
+        Erstellt und speichert eine Vorschau für ein Emoji als PNG im Cache-Verzeichnis.
+        Für animierte Emojis werden alle Frames als einzelne PNGs gespeichert.
+        Für statische Emojis wird ein einzelnes PNG erzeugt.
+        Parameter:
+            emoji (dict): Emoji-Daten mit 'link' (Bild-URL) und optional 'name'.
+        Verhalten:
+            - Lädt das Bild (ggf. aus Cache), skaliert es auf EMOJI_SIZE.
+            - Speichert die Vorschau im CACHE_DIR_PREVIEW.
+            - Bei Fehlern wird ein Platzhalterbild erzeugt.
+        """
+        url = emoji['link']
+        print(f'[PreviewCache] Starte für {url}')
+        img_bytes = self.fetch_and_cache_image(url)
+        if img_bytes is None:
+            print(f'[PreviewCache] Kein Bild geladen für {url}')
+            return
+        img_bytes_io = io.BytesIO(img_bytes)
+        ext = url.split('.')[-1].lower()
+        try:
+            img = Image.open(img_bytes_io)
+            is_animated = getattr(img, 'is_animated', False)
+        except Exception as e:
+            print(f'[PreviewCache] Fehler beim Öffnen des Bildes: {e}')
+            img = None
+            is_animated = False
+        if is_animated and img:
+            # Animierte Emoji: mehrere PNGs
+            try:
+                for frame_idx in range(img.n_frames):
+                    img.seek(frame_idx)
+                    frame = img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                    cache_path = self.get_preview_cache_path(url, frame_idx)
+                    try:
+                        if not os.path.exists(cache_path):
+                            frame.save(cache_path, format='PNG')
+                            print(f'[PreviewCache] Frame gespeichert: {cache_path}')
+                    except Exception as e:
+                        print(f'[PreviewCache] Fehler beim Speichern von Frame {frame_idx}: {e}')
+            except Exception as e:
+                print(f'[PreviewCache] Fehler bei Animationsextraktion: {e}')
+        else:
+            # Statisches Emoji: ein PNG
+            try:
+                if img:
+                    img.seek(0)
+                    img = img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                else:
+                    img = Image.open(img_bytes_io).resize((EMOJI_SIZE, EMOJI_SIZE))
+            except Exception as e:
+                print(f'[PreviewCache] Fehler beim Erstellen des statischen Bildes: {e}')
+                img = Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255))
+            cache_path = self.get_preview_cache_path(url)
+            try:
+                if not os.path.exists(cache_path):
+                    img.save(cache_path, format='PNG')
+                    print(f'[PreviewCache] Statisches Bild gespeichert: {cache_path}')
+            except Exception as e:
+                print(f'[PreviewCache] Fehler beim Speichern des statischen Bildes: {e}')
+
     def open_popover(self):
         # Aktives Fenster merken
         try:
             self.last_active_window = gw.getActiveWindow()
         except Exception:
             self.last_active_window = None
-        # Mausposition holen
         x, y = pyautogui.position()
-        # Wenn Fenster offen, schließen und neu öffnen
         if hasattr(self, 'popover') and self.popover is not None:
             try:
                 if self.popover.winfo_exists():
@@ -201,7 +281,6 @@ class EmojiPickerApp:
             except Exception:
                 pass
             self.popover = None
-        # Fenster immer neu an aktueller Mausposition öffnen
         self.popover = tk.Toplevel(self.root)
         self.popover.title('Emoji auswählen')
         self.popover.transient(self.root)
@@ -214,6 +293,7 @@ class EmojiPickerApp:
         grid = ttk.Frame(self.popover, padding=10)
         grid.pack()
         self.emoji_images = []
+        self.emoji_anim_states = []
         columns = 6
 
         def delete_emoji(idx):
@@ -227,52 +307,85 @@ class EmojiPickerApp:
                         pass
                     self.popover = None
                 self.open_popover()
+                self.invalidate_emoji_previews()
 
         for idx, emoji in enumerate(self.emoji_list):
-            try:
-                img_bytes = self.fetch_and_cache_image(emoji['link'])
-                if img_bytes is None:
-                    raise Exception('Kein Bild')
-                img_bytes_io = io.BytesIO(img_bytes)
-                # AVIF-Unterstützung prüfen
-                if emoji['link'].lower().endswith('.avif'):
+            url = emoji['link']
+            h = hashlib.sha256(url.encode('utf-8')).hexdigest()
+            # Try to load static preview image
+            static_frame_path = os.path.join(CACHE_DIR_PREVIEW, f'{h}.png')
+            static_photo = None
+            if os.path.exists(static_frame_path):
+                try:
+                    static_img = Image.open(static_frame_path)
+                    static_photo = ImageTk.PhotoImage(static_img)
+                except Exception:
+                    static_photo = None
+            # If static preview is missing, try to use first animation frame
+            if static_photo is None:
+                frame_path = os.path.join(CACHE_DIR_PREVIEW, f'{h}_0.png')
+                if os.path.exists(frame_path):
                     try:
-                        img = Image.open(img_bytes_io).resize((32, 32))
+                        static_img = Image.open(frame_path)
+                        static_photo = ImageTk.PhotoImage(static_img)
                     except Exception:
-                        img = Image.new('RGBA', (32, 32), (200, 200, 200, 255))
-                else:
-                    img = Image.open(img_bytes_io).resize((32, 32))
-                tk_img = ImageTk.PhotoImage(img)
-                self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
-                                bd=0, highlightthickness=0)
-                btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
-
-                # Rechtsklick-Kontextmenü
-                def make_popup(event, i=idx, e=emoji):
-                    menu = tk.Menu(self.popover, tearoff=0)
-                    if e.get('name'):
-                        menu.add_command(label=f'Name: {e["name"]}', state='disabled')
-                    menu.add_command(label='Emoji löschen', command=lambda: delete_emoji(i))
-                    menu.tk_popup(event.x_root, event.y_root)
-
-                btn.bind('<Button-3>', make_popup)
-            except Exception:
-                img = Image.new('RGBA', (32, 32), (200, 200, 200, 255))
-                tk_img = ImageTk.PhotoImage(img)
-                self.emoji_images.append(tk_img)
-                btn = tk.Button(grid, image=tk_img, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat',
-                                bd=0, highlightthickness=0)
-                btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
-
-                def make_popup(event, i=idx, e=emoji):
-                    menu = tk.Menu(self.popover, tearoff=0)
-                    if e.get('name'):
-                        menu.add_command(label=f'Name: {e["name"]}', state='disabled')
-                    menu.add_command(label='Emoji löschen', command=lambda: delete_emoji(i))
-                    menu.tk_popup(event.x_root, event.y_root)
-
-                btn.bind('<Button-3>', make_popup)
+                        static_photo = None
+                if static_photo is None:
+                    static_photo = ImageTk.PhotoImage(Image.new('RGBA', (EMOJI_SIZE, EMOJI_SIZE), (200, 200, 200, 255)))
+            self.emoji_images.append(static_photo)
+            self.emoji_anim_states.append({'frames': None, 'running': False, 'after_id': None})
+            btn = tk.Button(grid, image=static_photo, command=lambda l=emoji['link']: self.select_emoji(l), relief='flat', bd=0, highlightthickness=0)
+            btn.grid(row=idx // columns, column=idx % columns, padx=4, pady=4)
+            def start_animation(event, btn=btn, idx=idx, h=h):
+                state = self.emoji_anim_states[idx]
+                # Frames nur bei Hover laden
+                if state['frames'] is None:
+                    frames = []
+                    frame_idx = 0
+                    while True:
+                        frame_path = os.path.join(CACHE_DIR_PREVIEW, f'{h}_{frame_idx}.png')
+                        if os.path.exists(frame_path):
+                            try:
+                                img = Image.open(frame_path)
+                                frames.append(ImageTk.PhotoImage(img))
+                            except Exception:
+                                pass
+                            frame_idx += 1
+                        else:
+                            break
+                    if frames:
+                        state['frames'] = frames
+                    else:
+                        state['frames'] = [self.emoji_images[idx]]
+                if len(state['frames']) > 1:
+                    state['running'] = True
+                    def animate(frame_idx=0):
+                        if not state['running']:
+                            # Längenprüfung hinzugefügt
+                            if state['frames'] and len(state['frames']) > 0:
+                                btn.config(image=state['frames'][0])
+                            return
+                        btn.config(image=state['frames'][frame_idx])
+                        state['after_id'] = self.popover.after(ANIMATION_DELAY_MS, animate, (frame_idx + 1) % len(state['frames']))
+                    animate()
+            def stop_animation(event, btn=btn, idx=idx):
+                state = self.emoji_anim_states[idx]
+                state['running'] = False
+                if state['after_id']:
+                    self.popover.after_cancel(state['after_id'])
+                    state['after_id'] = None
+                btn.config(image=self.emoji_images[idx])
+                # Remove animation frames from memory (save RAM)
+                state['frames'] = None
+            btn.bind('<Enter>', start_animation)
+            btn.bind('<Leave>', stop_animation)
+            def make_popup(event, i=idx, e=emoji):
+                menu = tk.Menu(self.popover, tearoff=0)
+                if e.get('name'):
+                    menu.add_command(label=f'Name: {e["name"]}', state='disabled')
+                menu.add_command(label='Emoji löschen', command=lambda: delete_emoji(i))
+                menu.tk_popup(event.x_root, event.y_root)
+            btn.bind('<Button-3>', make_popup)
 
     def select_emoji(self, link):
         # Popover schließen
@@ -317,9 +430,12 @@ class EmojiPickerApp:
             messagebox.showerror('Fehler', f'Bild konnte nicht geladen werden: {e}')
             return
         name = simpledialog.askstring('Name (optional)', 'Name für das Emoji (optional):')
-        self.emoji_list.append({'link': url, 'name': name or ''})
+        emoji = {'link': url, 'name': name or ''}
+        self.emoji_list.append(emoji)
+        self.create_emoji_preview_cache(emoji)
         self.save_emojis()
         messagebox.showinfo('Erfolg', 'Emoji hinzugefügt!')
+        self.invalidate_emoji_previews()
 
     def open_data_folder(self):
         # Öffnet den Ordner, in dem Cache und Config liegen
