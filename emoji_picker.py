@@ -17,7 +17,7 @@ import pystray
 from PIL import Image as PILImage
 
 EMOJI_SIZE = 64
-ANIMATION_DELAY_MS = 80  # Verzögerung für Emoji-Animationen in Millisekunden
+ANIMATION_DELAY_MS = 100  # Delay for emoji animations in milliseconds
 
 # Einfache Mutex-Implementierung für Windows, um Mehrfachstarts zu verhindern
 if sys.platform == 'win32':
@@ -61,10 +61,12 @@ class EmojiPickerApp:
     def save_emojis(self):
         with open(EMOJI_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.emoji_list, f, indent=4)
-        # Vorschau-Cache für alle Emojis erzeugen
-        for emoji in self.emoji_list:
-            self.create_emoji_preview_cache(emoji)
-        self.invalidate_emoji_previews()
+        # Vorschau-Cache für alle Emojis im Hintergrund erzeugen
+        def cache_worker():
+            for emoji in self.emoji_list:
+                self.create_emoji_preview_cache(emoji)
+            self.invalidate_emoji_previews()
+        threading.Thread(target=cache_worker, daemon=True).start()
 
     def load_config(self):
         if not os.path.exists(CONFIG_FILE):
@@ -225,18 +227,18 @@ class EmojiPickerApp:
         img_bytes_io = io.BytesIO(img_bytes)
         ext = url.split('.')[-1].lower()
         try:
-            pil_img = Image.open(img_bytes_io)
-            is_animated = getattr(pil_img, 'is_animated', False)
+            img = Image.open(img_bytes_io)
+            is_animated = getattr(img, 'is_animated', False)
         except Exception as e:
             print(f'[PreviewCache] Fehler beim Öffnen des Bildes: {e}')
-            pil_img = None
+            img = None
             is_animated = False
-        if is_animated and pil_img:
+        if is_animated and img:
             # Animierte Emoji: mehrere PNGs
             try:
-                for frame_idx in range(pil_img.n_frames):
-                    pil_img.seek(frame_idx)
-                    frame = pil_img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                for frame_idx in range(img.n_frames):
+                    img.seek(frame_idx)
+                    frame = img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
                     cache_path = self.get_preview_cache_path(url, frame_idx)
                     try:
                         if not os.path.exists(cache_path):
@@ -249,9 +251,9 @@ class EmojiPickerApp:
         else:
             # Statisches Emoji: ein PNG
             try:
-                if pil_img:
-                    pil_img.seek(0)
-                    img = pil_img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
+                if img:
+                    img.seek(0)
+                    img = img.copy().resize((EMOJI_SIZE, EMOJI_SIZE))
                 else:
                     img = Image.open(img_bytes_io).resize((EMOJI_SIZE, EMOJI_SIZE))
             except Exception as e:
@@ -359,7 +361,9 @@ class EmojiPickerApp:
                     state['running'] = True
                     def animate(frame_idx=0):
                         if not state['running']:
-                            btn.config(image=state['frames'][0])
+                            # Längenprüfung hinzugefügt
+                            if state['frames'] and len(state['frames']) > 0:
+                                btn.config(image=state['frames'][0])
                             return
                         btn.config(image=state['frames'][frame_idx])
                         state['after_id'] = self.popover.after(ANIMATION_DELAY_MS, animate, (frame_idx + 1) % len(state['frames']))
@@ -371,7 +375,7 @@ class EmojiPickerApp:
                     self.popover.after_cancel(state['after_id'])
                     state['after_id'] = None
                 btn.config(image=self.emoji_images[idx])
-                # Animation-Frames aus dem Speicher entfernen (RAM sparen)
+                # Remove animation frames from memory (save RAM)
                 state['frames'] = None
             btn.bind('<Enter>', start_animation)
             btn.bind('<Leave>', stop_animation)
