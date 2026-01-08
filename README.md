@@ -27,11 +27,12 @@ Tray menu:
 - **Hotkey ändern**: change the global hotkey
 - **Ordner öffnen**: open the app data folder
 - **Beenden**: quit
-
+- 
+### Screenshot
 ![img.png](doc/img.png)
-
+### Usesage example
 ![Demo.gif](doc/demo_usage.gif)
-
+### Add new emoji example
 ![Demo.gif](doc/demo_add_new_emoji.gif)
 
 ## Configuration
